@@ -1,0 +1,151 @@
+name: Build OrangeFox Kingfinix B 12
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Recovery
+    runs-on: ubuntu-22.04
+
+    env:
+      TZ: Asia/Jakarta
+
+    steps:
+      - name: Maximize Build Space (Solusi Ampuh Anti Read-Only)
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update && sudo apt install -y \
+            git-core gnupg flex bison gperf build-essential \
+            zip curl zlib1g-dev gcc-multilib g++-multilib \
+            libc6-dev-i386 lib32z1-dev libgl1-mesa-dev \
+            libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk \
+            rsync ccache
+          df -h
+
+      - name: Set Java 11
+        run: |
+          sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+          java -version
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Setup Repo Tool
+        run: |
+          mkdir -p ~/bin
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Manual Shallow Sync OrangeFox (Bypass GitLab Auth & Hemat Space)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/OrangeFox_sync
+          cd $GITHUB_WORKSPACE/OrangeFox_sync
+          git clone https://gitlab.com/OrangeFox/sync.git
+          cd $GITHUB_WORKSPACE/OrangeFox_sync/sync/
+          ./orangefox_sync.sh --branch 12.1 --path $GITHUB_WORKSPACE/fox_12.1
+
+      - name: Clone Device Tree to OrangeFox
+        run: |
+          cd $GITHUB_WORKSPACE/fox_12.1
+          git clone --depth=1 -b android-10.0 \
+            https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
+
+      - name: Setup CCache
+        run: |
+          export USE_CCACHE=1
+          export CCACHE_EXEC=$(which ccache)
+          export CCACHE_DIR=$GITHUB_WORKSPACE/.ccache
+          ccache -M 10G
+
+      - name: Build OrangeFox
+        run: |
+          cd $GITHUB_WORKSPACE/fox_12.1
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export FOX_BUILD_DEVICE=X655C
+          export LC_ALL=C
+          export USE_CCACHE=1
+          export CCACHE_EXEC=$(which ccache)
+          export TEMPORARY_DISABLE_SOONG_TESTS=true
+          set +e
+          source build/envsetup.sh
+          lunch omni_X655C-eng
+          if [ $? -ne 0 ]; then
+            echo "Target omni_X655C-eng not found. Trying fallback target twrp_X655C-eng..."
+            lunch twrp_X655C-eng
+          fi
+          set -e
+          mka adbd recoveryimage -j$(nproc --all)
+
+      - name: Prepare Release Files
+        run: |
+          cd $GITHUB_WORKSPACE/fox_12.1/out/target/product/X655C
+          BUILD_DATE=$(date +"%Y%m%d-%H%M")
+          mkdir -p release
+          cp recovery.img release/OrangeFox-X655C-${BUILD_DATE}.img 2>/dev/null || true
+          cp OrangeFox-*.zip release/ 2>/dev/null || true
+          [ -f boot.img ] && cp boot.img release/ || true
+          [ -f dtbo.img ] && cp dtbo.img release/ || true
+          cd release
+          zip -r OrangeFox-X655C-${BUILD_DATE}-Unofficial.zip ./*
+
+      - name: Verify Output
+        run: |
+          cd $GITHUB_WORKSPACE/fox_12.1/out/target/product/X655C/release
+          echo "===== RELEASE FILES ====="
+          ls -lh
+
+      - name: Upload Recovery IMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-img
+          path: ${{ github.workspace }}/fox_12.1/out/target/product/X655C/release/*.img
+
+      - name: Upload Recovery ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-zip
+          path: ${{ github.workspace }}/fox_12.1/out/target/product/X655C/release/*.zip
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            ${{ github.workspace }}/fox_12.1/out/*.log
+            ${{ github.workspace }}/fox_12.1/out/*.txt
+          if-no-files-found: ignore
+
+      - name: Generate Release Tag
+        id: tag
+        run: |
+          echo "release_tag=OrangeFox-$(date +"%Y%m%d-%H%M")" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: X655C OrangeFox Build ${{ steps.tag.outputs.release_tag }}
+          generate_release_notes: true
+          files: |
+            ${{ github.workspace }}/fox_12.1/out/target/product/X655C/release/*.img
+            ${{ github.workspace }}/fox_12.1/out/target/product/X655C/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
