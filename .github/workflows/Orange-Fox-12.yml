@@ -7,6 +7,8 @@ jobs:
   build:
     name: Build Recovery
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
 
     env:
       TZ: Asia/Jakarta
