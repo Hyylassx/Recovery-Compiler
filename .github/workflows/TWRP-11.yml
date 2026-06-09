@@ -1,0 +1,189 @@
+name: Build TWRP Kingfinix B 11
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Recovery
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Jakarta
+
+    steps:
+      - name: Cleanup Runner
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/hostedtoolcache
+          sudo docker image prune --all --force
+          sudo apt clean
+          df -h
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+
+          sudo apt install -y \
+            git-core gnupg flex bison gperf build-essential \
+            zip curl zlib1g-dev gcc-multilib g++-multilib \
+            libc6-dev-i386 \
+            lib32z1-dev \
+            libgl1-mesa-dev \
+            libxml2-utils xsltproc unzip \
+            fontconfig python3 openjdk-11-jdk \
+            rsync ccache
+
+      - name: Set Java 11
+        run: |
+          sudo update-alternatives --set java \
+            /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+
+          java -version
+
+      - name: Setup Git Identity
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Setup Repo Tool
+        run: |
+          mkdir -p ~/bin
+
+          curl -L \
+            https://storage.googleapis.com/git-repo-downloads/repo \
+            > ~/bin/repo
+
+          chmod a+x ~/bin/repo
+
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Init TWRP Source
+        run: |
+          mkdir twrp
+          cd twrp
+
+          repo init --depth=1 \
+            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp \
+            -b twrp-11
+
+      - name: Sync Sources
+        run: |
+          cd twrp
+
+          repo sync \
+            -c \
+            --no-clone-bundle \
+            --no-tags \
+            --force-sync \
+            -j$(nproc --all)
+
+      - name: Clone Device Tree
+        run: |
+          cd twrp
+
+          mkdir -p device/infinix
+
+          git clone --depth=1 \
+            -b android-10.0 \
+            https://github.com/Hyylassx/TWRP-Infinix-Hot-9-X655C-Tree \
+            device/infinix/X655C
+    
+      - name: Setup CCache
+        run: |
+          export USE_CCACHE=1
+          export CCACHE_EXEC=$(which ccache)
+
+          ccache -M 10G
+
+      - name: Show Free Space
+        run: |
+          df -h
+          
+      - name: Build Recovery
+        run: |
+          cd twrp
+
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export LC_ALL=C
+
+          export USE_CCACHE=1
+          export CCACHE_EXEC=$(which ccache)
+
+          source build/envsetup.sh
+
+          lunch omni_X655C-eng
+
+          mka recoveryimage -j$(nproc --all)
+
+      - name: Debug on Failure (Open Terminal)
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Prepare Release Files
+        run: |
+          cd twrp/out/target/product/X655C
+          BUILD_DATE=$(date +"%Y%m%d-%H%M")
+          mkdir -p release
+          
+          # Main recovery image
+          cp recovery.img release/TWRP-X655C-${BUILD_DATE}.img
+          
+          # Optional extra images
+          [ -f boot.img ] && cp boot.img release/
+          [ -f dtbo.img ] && cp dtbo.img release/
+          [ -f vbmeta.img ] && cp vbmeta.img release/
+
+          # Zip compression safely handled inside directory target
+          cd release
+          zip -r TWRP-X655C-${BUILD_DATE}.zip ./*
+          
+      - name: Verify Output
+        run: |
+          cd twrp/out/target/product/X655C/release
+
+          echo "===== RELEASE FILES ====="
+          ls -lh
+
+      - name: Upload Recovery IMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-img
+          path: twrp/out/target/product/X655C/release/*.img
+
+      - name: Upload Recovery ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-zip
+          path: twrp/out/target/product/X655C/release/*.zip
+
+      - name: Upload Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            twrp/out/*.log
+            twrp/out/*.txt
+          if-no-files-found: ignore
+
+      - name: Generate Release Tag
+        id: tag
+        run: |
+          echo "release_tag=TWRP-$(date +"%Y%m%d-%H%M")" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: X655C TWRP Build ${{ steps.tag.outputs.release_tag }}
+          generate_release_notes: true
+          files: |
+            twrp/out/target/product/X655C/release/*.img
+            twrp/out/target/product/X655C/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
