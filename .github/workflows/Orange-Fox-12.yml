@@ -67,21 +67,12 @@ jobs:
           git clone --depth=1 -b android-10.0 \
             https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
 
-      - name: Setup CCache
-        run: |
-          export USE_CCACHE=1
-          export CCACHE_EXEC=$(which ccache)
-          export CCACHE_DIR=$GITHUB_WORKSPACE/.ccache
-          ccache -M 10G
-
       - name: Build OrangeFox
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
           export ALLOW_MISSING_DEPENDENCIES=true
           export FOX_BUILD_DEVICE=X655C
           export LC_ALL=C
-          export USE_CCACHE=1
-          export CCACHE_EXEC=$(which ccache)
           export TEMPORARY_DISABLE_SOONG_TESTS=true
           set +e
           source build/envsetup.sh
