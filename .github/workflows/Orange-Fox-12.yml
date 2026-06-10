@@ -76,6 +76,9 @@ jobs:
           export FOX_BUILD_DEVICE=X655C
           export LC_ALL=C
           export TEMPORARY_DISABLE_SOONG_TESTS=true
+          export OF_PATCH_VARIANT="t33xx"
+          export OF_MAINTAINER="Hylassx"
+          export FOX_MAINTAINER_PATCH_VERSION="1"
           set +e
           source build/envsetup.sh
           lunch omni_X655C-eng
@@ -85,7 +88,7 @@ jobs:
           fi
           set -e
           mka adbd recoveryimage -j$(nproc --all)
-
+          
       - name: Prepare Release Files
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1/out/target/product/X655C
