@@ -142,7 +142,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
-          name: X655C OrangeFox Build ${{ steps.tag.outputs.release_tag }}
+          name: X655C OrangeFox Build Debug ${{ steps.tag.outputs.release_tag }}
           generate_release_notes: true
           files: |
             ${{ github.workspace }}/fox_12.1/out/target/product/X655C/release/*.img
