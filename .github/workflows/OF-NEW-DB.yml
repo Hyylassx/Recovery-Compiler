@@ -1,4 +1,4 @@
-name: Build OrangeFox Debug Kingfinix B 12
+name: Build OrangeFox Debug X655C
 
 on:
   workflow_dispatch:
