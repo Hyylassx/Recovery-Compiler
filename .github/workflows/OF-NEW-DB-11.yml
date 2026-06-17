@@ -67,12 +67,17 @@ jobs:
           
           # 2. Wipe the vanilla TWRP recovery folder completely
           rm -rf bootable/recovery
+          rm -rf vendor/recovery
           
-          # 3. Pull OrangeFox Core assets directly into the wiped directory using the legacy tag snapshot
-          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/bootable/Recovery.git
+          # 3. Pull OrangeFox Core assets into the correct bootable/recovery folder
+          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/bootable/Recovery.git bootable/recovery
           
-          # 4. Pull OrangeFox Vendor branding configurations into the vendor directory
-          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/vendor/recovery.git
+          # 4. Pull OrangeFox Vendor configurations into the correct vendor/recovery folder
+          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/vendor/recovery.git vendor/recovery
+
+          # 5. Fix the Soong Path Panic by creating the self-referencing symlink
+          cd bootable/recovery
+          ln -s . Recovery
 
       - name: Clone Device Tree
         run: |
