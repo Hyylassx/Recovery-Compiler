@@ -62,7 +62,9 @@ jobs:
           cd $GITHUB_WORKSPACE/fox_11.1
           
           # Initialize TWRP Android 11 minimal manifest baseline
-          repo init --depth=1 -u https://github.com -b twrp-11
+          repo init --depth=1 \
+            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp \
+            -b twrp-11
           
           # Ingest OrangeFox 11 Core elements into local manifests
           mkdir -p .repo/local_manifests
