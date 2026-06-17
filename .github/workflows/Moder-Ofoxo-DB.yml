@@ -76,13 +76,63 @@ jobs:
       - name: Fix fscrypt - allow multiple definitions
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
-          # Revert any previous renames first
-          git -C vendor/twrp checkout -- . 2>/dev/null || true
           
-          # Allow duplicate symbols in linker
-          sed -i 's/ldflags: \[\]/ldflags: ["-Wl,--allow-multiple-definition"]/g' system/vold/Android.bp 2>/dev/null || true
-          sed -i 's/ldflags: \[\]/ldflags: ["-Wl,--allow-multiple-definition"]/g' system/core/init/Android.bp 2>/dev/null || true
-    
+          # Revert any previous patches
+          git -C vendor/twrp checkout -- . 2>/dev/null || true
+          git -C system/core/fs_mgr checkout -- . 2>/dev/null || true
+          git -C system/core/init checkout -- . 2>/dev/null || true
+          git -C system/vold checkout -- . 2>/dev/null || true
+          
+          # Use Python to properly patch Android.bp files
+          python3 << 'PYEOF'
+          import re
+          import os
+          
+          def add_ldflags_to_module(filepath, module_name, ldflags_value):
+              if not os.path.exists(filepath):
+                  print(f"File not found: {filepath}")
+                  return
+              
+              with open(filepath, 'r') as f:
+                  content = f.read()
+              
+              # Pattern to find cc_binary or cc_library with the given name
+              # This matches: cc_binary { ... name: "vold" ... }
+              pattern = rf'(cc_binary\s*{{[^{{}}]*?name:\s*"{module_name}"[^{{}}]*?)(}}|static_libs:|shared_libs:|srcs:)'
+              
+              def replacer(match):
+                  before = match.group(1)
+                  after = match.group(2)
+                  # Check if ldflags already exists
+                  if 'ldflags:' in before:
+                      # Append to existing ldflags
+                      before = re.sub(
+                          r'ldflags:\s*\[(.*?)\]',
+                          rf'ldflags: [\1, "{ldflags_value}"]',
+                          before
+                      )
+                      return before + after
+                  else:
+                      # Add new ldflags before the closing or next field
+                      return before + f'    ldflags: ["{ldflags_value}"],\n    ' + after
+              
+              new_content = re.sub(pattern, replacer, content, count=1, flags=re.DOTALL)
+              
+              with open(filepath, 'w') as f:
+                  f.write(new_content)
+              
+              print(f"Patched {filepath} for module '{module_name}'")
+          
+          # Patch vold
+          add_ldflags_to_module('system/vold/Android.bp', 'vold', '-Wl,--allow-multiple-definition')
+          
+          # Patch init_second_stage
+          add_ldflags_to_module('system/core/init/Android.bp', 'init_second_stage', '-Wl,--allow-multiple-definition')
+          
+          # Also patch init (first stage) if it exists
+          add_ldflags_to_module('system/core/init/Android.bp', 'init', '-Wl,--allow-multiple-definition')
+          PYEOF
+
       - name: Build OrangeFox
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
