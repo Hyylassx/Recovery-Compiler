@@ -56,13 +56,27 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Sync OrangeFox 11.1
+      - name: Sync OrangeFox 11.1 (Manual Repo Approach)
         run: |
-          mkdir -p $GITHUB_WORKSPACE/OrangeFox_sync
-          cd $GITHUB_WORKSPACE/OrangeFox_sync
-          git clone https://gitlab.com/OrangeFox/sync.git
-          cd $GITHUB_WORKSPACE/OrangeFox_sync/sync/
-          ./orangefox_sync.sh --branch 11.1 --path $GITHUB_WORKSPACE/fox_11.1
+          mkdir -p $GITHUB_WORKSPACE/fox_11.1
+          cd $GITHUB_WORKSPACE/fox_11.1
+          
+          # Initialize TWRP Android 11 minimal manifest baseline
+          repo init --depth=1 -u https://github.com -b twrp-11
+          
+          # Ingest OrangeFox 11 Core elements into local manifests
+          mkdir -p .repo/local_manifests
+          cat <<EOF > .repo/local_manifests/orangefox.xml
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+            <remote name="orangefox" fetch="https://gitlab.com/OrangeFox" />
+            <project path="bootable/recovery" name="bootable/Recovery" remote="orangefox" revision="fox_11.0" />
+            <project path="vendor/recovery" name="vendor/recovery" remote="orangefox" revision="fox_11.0" />
+          </manifest>
+          EOF
+          
+          # Run parallel sync mapping
+          repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
       - name: Clone Device Tree
         run: |
