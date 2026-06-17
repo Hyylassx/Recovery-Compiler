@@ -66,14 +66,18 @@ jobs:
             -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp \
             -b twrp-11
           
-          # Ingest OrangeFox 11 Core elements into local manifests
+          # Ingest OrangeFox 11 Core elements and REMOVE the duplicate stock TWRP tracking path
           mkdir -p .repo/local_manifests
           cat <<EOF > .repo/local_manifests/orangefox.xml
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
+            <!-- 1. Remove the default stock TWRP path to resolve the duplicate error -->
+            <remove-project name="platform/bootable/recovery" />
+
+            <!-- 2. Inject official OrangeFox dependencies from immutable legacy snapshots -->
             <remote name="orangefox" fetch="https://gitlab.com/OrangeFox" />
-            <project path="bootable/recovery" name="bootable/Recovery" remote="orangefox" revision="fox_11.0" />
-            <project path="vendor/recovery" name="vendor/recovery" remote="orangefox" revision="fox_11.0" />
+            <project path="bootable/recovery" name="bootable/Recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
+            <project path="vendor/recovery" name="vendor/recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
           </manifest>
           EOF
           
