@@ -69,10 +69,10 @@ jobs:
           rm -rf bootable/recovery
           
           # 3. Pull OrangeFox Core assets directly into the wiped directory using the legacy tag snapshot
-          git clone --depth=1 -b R11.1_2 https://gitlab.com bootable/recovery
+          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/bootable/Recovery.git
           
           # 4. Pull OrangeFox Vendor branding configurations into the vendor directory
-          git clone --depth=1 -b R11.1_2 https://gitlab.com vendor/recovery
+          git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/vendor/recovery.git
 
       - name: Clone Device Tree
         run: |
