@@ -1,4 +1,4 @@
-name: Build OrangeFox MD Debug Kingfinix B 12
+name: Build OrangeFox MD Debug Kingfinix
 
 on:
   workflow_dispatch:
