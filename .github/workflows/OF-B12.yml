@@ -1,4 +1,4 @@
-name: Build OrangeFox Kingfinix B 12
+name: Build OrangeFox Infinix X655C
 
 on:
   workflow_dispatch:
