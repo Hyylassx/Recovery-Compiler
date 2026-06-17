@@ -1,4 +1,4 @@
-name: Build OrangeFox Trying B-Fox.11.0 
+name: Build OrangeFox X655C GSI-Ready
 
 on:
   workflow_dispatch:
@@ -31,11 +31,11 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update && sudo apt install -y \
-            git-core gnupg flex bison gperf build-essential \
-            zip curl zlib1g-dev gcc-multilib g++-multilib \
-            libc6-dev-i386 lib32z1-dev libgl1-mesa-dev \
-            libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk \
-            rsync ccache
+           git-core gnupg flex bison gperf build-essential \
+           zip curl zlib1g-dev gcc-multilib g++-multilib \
+           libc6-dev-i386 lib32z1-dev libgl1-mesa-dev \
+           libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk \
+           rsync ccache
           df -h
 
       - name: Set up Java 11
@@ -56,26 +56,20 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Sync OrangeFox 11.1 (Direct Bash Overwrite)
+      - name: Sync OrangeFox 11.1
         run: |
           mkdir -p $GITHUB_WORKSPACE/fox_11.1
           cd $GITHUB_WORKSPACE/fox_11.1
           
-          # 1. Initialize and sync the standard TWRP Android 11 minimal baseline
           repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-11
           repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
           
-          # 2. Wipe the vanilla TWRP recovery folder completely
           rm -rf bootable/recovery
           rm -rf vendor/recovery
           
-          # 3. Pull OrangeFox Core assets into the correct bootable/recovery folder
           git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/bootable/Recovery.git bootable/recovery
-          
-          # 4. Pull OrangeFox Vendor configurations into the correct vendor/recovery folder
           git clone --depth=1 -b fox_11.0 https://gitlab.com/OrangeFox/vendor/recovery.git vendor/recovery
 
-          # 5. Fix the Soong Path Panic by creating the self-referencing symlink
           cd bootable/recovery
           ln -s . Recovery
 
@@ -92,9 +86,12 @@ jobs:
           export FOX_BUILD_DEVICE=X655C
           export LC_ALL=C
           export TEMPORARY_DISABLE_SOONG_TESTS=true
-          export OF_PATCH_VARIANT="t33xx"
+          export OF_PATCH_VARIANT="t63xx"
           export OF_MAINTAINER="Hylassx"
           export FOX_MAINTAINER_PATCH_VERSION="1"
+          export OF_VNDK_VERSION=29
+          export OF_USE_VNDK=true
+          
           set +e
           source build/envsetup.sh
           lunch omni_X655C-eng
