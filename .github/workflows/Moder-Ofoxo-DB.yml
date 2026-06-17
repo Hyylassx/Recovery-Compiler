@@ -73,41 +73,16 @@ jobs:
           git clone --depth=1 -b modern-debug-android-10.0 \
             https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
 
-      - name: Fix fscrypt duplicate - rename TWRP function only
+      - name: Fix fscrypt - allow multiple definitions
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
+          # Revert any previous renames first
+          git -C vendor/twrp checkout -- . 2>/dev/null || true
           
-          # First, restore libfscrypt dependency if we removed it
-          if ! grep -q "libfscrypt" system/core/fs_mgr/Android.bp 2>/dev/null; then
-            echo "Restoring libfscrypt dependency to fs_mgr"
-            # Add it back - you'll need to know the exact line format
-            # For now, let's check what the original looked like
-            git -C system/core/fs_mgr checkout Android.bp 2>/dev/null || true
-          fi
-          
-          # Find TWRP's fscrypt.cpp and rename ONLY the function definition
-          TWRP_FSCRYPT=$(find vendor/twrp/ -name "fscrypt.cpp" -path "*/libfscrypt/*" 2>/dev/null | head -1)
-          
-          if [ -n "$TWRP_FSCRYPT" ]; then
-            echo "Renaming fscrypt_is_native in $TWRP_FSCRYPT"
-            # Rename the function definition and declaration, but NOT the header include
-            sed -i 's/^bool fscrypt_is_native()/bool twrp_fscrypt_is_native()/g' "$TWRP_FSCRYPT"
-            sed -i 's/^int fscrypt_is_native()/int twrp_fscrypt_is_native()/g' "$TWRP_FSCRYPT"
-            
-            # Also patch the header
-            TWRP_HEADER=$(dirname "$TWRP_FSCRYPT")/fscrypt.h
-            if [ -f "$TWRP_HEADER" ]; then
-              sed -i 's/fscrypt_is_native/twrp_fscrypt_is_native/g' "$TWRP_HEADER"
-            fi
-          fi
-          
-          # Patch any TWRP files that CALL fscrypt_is_native (not AOSP files)
-          find vendor/twrp/ -type f \( -name "*.cpp" -o -name "*.c" \) \
-            -exec grep -l "fscrypt_is_native" {} \; 2>/dev/null | while read f; do
-            # Only rename calls, not includes
-            sed -i 's/\bfscrypt_is_native\b/twrp_fscrypt_is_native/g' "$f"
-          done
-          
+          # Allow duplicate symbols in linker
+          sed -i 's/ldflags: \[\]/ldflags: ["-Wl,--allow-multiple-definition"]/g' system/vold/Android.bp 2>/dev/null || true
+          sed -i 's/ldflags: \[\]/ldflags: ["-Wl,--allow-multiple-definition"]/g' system/core/init/Android.bp 2>/dev/null || true
+    
       - name: Build OrangeFox
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
