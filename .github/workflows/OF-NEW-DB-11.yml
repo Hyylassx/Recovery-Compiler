@@ -60,8 +60,7 @@ jobs:
         run: |
           mkdir -p $GITHUB_WORKSPACE/fox_11.1
           cd $GITHUB_WORKSPACE/fox_11.1
-          
-          # Initialize TWRP Android 11 minimal manifest baseline
+
           repo init --depth=1 \
             -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp \
             -b twrp-11
@@ -71,11 +70,11 @@ jobs:
           cat <<EOF > .repo/local_manifests/orangefox.xml
           <?xml version="1.0" encoding="UTF-8"?>
           <manifest>
-            <!-- 1. Remove the default stock TWRP path to resolve the duplicate error -->
-            <remove-project name="platform/bootable/recovery" />
+            <!-- 1. Remove the correct base TWRP path to resolve the duplicate error -->
+            <remove-project name="bootable/recovery" />
 
             <!-- 2. Inject official OrangeFox dependencies from immutable legacy snapshots -->
-            <remote name="orangefox" fetch="https://gitlab.com/OrangeFox" />
+            <remote name="orangefox" fetch="https://gitlab.com" />
             <project path="bootable/recovery" name="bootable/Recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
             <project path="vendor/recovery" name="vendor/recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
           </manifest>
