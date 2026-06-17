@@ -73,24 +73,28 @@ jobs:
           git clone --depth=1 -b modern-debug-android-10.0 \
             https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
 
-      - name: Fix fscrypt duplicate symbol in fs_mgr
+      - name: Fix fscrypt duplicate - remove TWRP from fs_mgr
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
           
-          # Find all fscrypt files in system/core/fs_mgr that have fscrypt_is_native
-          find system/core/fs_mgr/ -type f \( -name "*.cpp" -o -name "*.c" -o -name "*.h" \) \
-            -exec grep -l "fscrypt_is_native" {} \; 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            sed -i 's/\bfscrypt_is_native\b/fs_mgr_fscrypt_is_native/g' "$f"
-          done
+          # Check if fs_mgr build files reference libfscrypt
+          if grep -q "libfscrypt" system/core/fs_mgr/Android.bp 2>/dev/null; then
+            echo "Removing libfscrypt from fs_mgr Android.bp"
+            sed -i '/libfscrypt/d' system/core/fs_mgr/Android.bp
+          fi
           
-          # Also patch vendor/twrp/libfscrypt to match (so recovery uses same name)
-          find vendor/twrp/ -type f \( -name "*.cpp" -o -name "*.c" -o -name "*.h" \) \
-            -exec grep -l "fscrypt_is_native" {} \; 2>/dev/null | while read f; do
-            echo "Patching: $f"
-            sed -i 's/\bfscrypt_is_native\b/fs_mgr_fscrypt_is_native/g' "$f"
-          done
-
+          if grep -q "libfscrypt" system/core/fs_mgr/Android.mk 2>/dev/null; then
+            echo "Removing libfscrypt from fs_mgr Android.mk"
+            sed -i '/libfscrypt/d' system/core/fs_mgr/Android.mk
+          fi
+          
+          # Alternative: if TWRP fscrypt is in fs_mgr source directly
+          # Remove or rename the TWRP definition only
+          if [ -f system/core/fs_mgr/libfs_mgr.cpp ]; then
+            # Comment out the TWRP definition if it exists in fs_mgr
+            sed -i 's/^bool fscrypt_is_native/\/\/ TWRP duplicate removed - using AOSP vold version\n\/\/ bool fscrypt_is_native/' system/core/fs_mgr/libfs_mgr.cpp 2>/dev/null || true
+          fi
+          
       - name: Build OrangeFox
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
