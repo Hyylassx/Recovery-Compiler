@@ -1,4 +1,4 @@
-name: Build OrangeFox MD Debug Kingfinix
+name: Build OrangeFox Debug Kingfinix
 
 on:
   workflow_dispatch:
@@ -70,7 +70,7 @@ jobs:
       - name: Clone Device Tree to OrangeFox
         run: |
           cd $GITHUB_WORKSPACE/fox_12.1
-          git clone --depth=1 -b modern-debug-android-10.0 \
+          git clone --depth=1 -b debug-android-10.0 \
             https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
 
       - name: Fix fscrypt - allow multiple definitions
