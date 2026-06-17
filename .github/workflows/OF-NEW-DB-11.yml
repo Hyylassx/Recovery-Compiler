@@ -56,32 +56,23 @@ jobs:
           chmod a+x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      - name: Sync OrangeFox 11.1 (Manual Repo Approach)
+      - name: Sync OrangeFox 11.1 (Direct Bash Overwrite)
         run: |
           mkdir -p $GITHUB_WORKSPACE/fox_11.1
           cd $GITHUB_WORKSPACE/fox_11.1
-
-          repo init --depth=1 \
-            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp \
-            -b twrp-11
           
-          # Ingest OrangeFox 11 Core elements and REMOVE the duplicate stock TWRP tracking path
-          mkdir -p .repo/local_manifests
-          cat <<EOF > .repo/local_manifests/orangefox.xml
-          <?xml version="1.0" encoding="UTF-8"?>
-          <manifest>
-            <!-- 1. Remove the correct base TWRP path to resolve the duplicate error -->
-            <remove-project name="bootable/recovery" />
-
-            <!-- 2. Inject official OrangeFox dependencies from immutable legacy snapshots -->
-            <remote name="orangefox" fetch="https://gitlab.com" />
-            <project path="bootable/recovery" name="bootable/Recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
-            <project path="vendor/recovery" name="vendor/recovery" remote="orangefox" revision="refs/tags/R11.1_2" />
-          </manifest>
-          EOF
-          
-          # Run parallel sync mapping
+          # 1. Initialize and sync the standard TWRP Android 11 minimal baseline
+          repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-11
           repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          
+          # 2. Wipe the vanilla TWRP recovery folder completely
+          rm -rf bootable/recovery
+          
+          # 3. Pull OrangeFox Core assets directly into the wiped directory using the legacy tag snapshot
+          git clone --depth=1 -b R11.1_2 https://gitlab.com bootable/recovery
+          
+          # 4. Pull OrangeFox Vendor branding configurations into the vendor directory
+          git clone --depth=1 -b R11.1_2 https://gitlab.com vendor/recovery
 
       - name: Clone Device Tree
         run: |
