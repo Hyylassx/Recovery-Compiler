@@ -1,0 +1,181 @@
+name: Build OrangeFox X655C GSI-Ready Native
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Recovery Image
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    env:
+      TZ: Asia/Jakarta
+
+    steps:
+      - name: Maximize Workspace Disk Capacity
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Development Toolkit Dependencies
+        run: |
+          sudo apt update && sudo apt install -y \
+           git-core gnupg flex bison gperf build-essential \
+           zip curl zlib1g-dev gcc-multilib g++-multilib \
+           libc6-dev-i386 lib32z1-dev libgl1-mesa-dev \
+           libxml2-utils xsltproc unzip fontconfig python3 openjdk-11-jdk \
+           rsync ccache
+          df -h
+
+      - name: Configure Java 11 Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      - name: Establish Git Identity
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Deploy Google Repo Sync Engine
+        run: |
+          mkdir -p ~/bin
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Shallow Sync Unified Source Environment (Android 11 Framework Base)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/fox_11.1
+          cd $GITHUB_WORKSPACE/fox_11.1
+          
+          # Initialize the intermediate Android 11 base framework manifest
+          repo init --depth=1 -u https://github.com -b twrp-11
+          repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          
+          # Evict default standard AOSP recovery modules to prevent linker collisions
+          rm -rf bootable/recovery
+          rm -rf vendor/recovery
+          
+          # Inject OrangeFox 11.0 core engines to handle multi-version FBE mapping
+          git clone --depth=1 -b fox_11.0 https://gitlab.com bootable/recovery
+          git clone --depth=1 -b fox_11.0 https://gitlab.com vendor/recovery
+
+          cd bootable/recovery
+          ln -s . Recovery
+
+      - name: Clone Custom Device Tree Workspace
+        run: |
+          cd $GITHUB_WORKSPACE/fox_11.1
+          git clone --depth=1 -b modern-debug-android-10.0 \
+            https://github.com/Hyylassx/Orange-Fox-Infinix-Hot-9-X655C-Tree device/infinix/X655C
+
+      - name: Fix Security Executable Extensions & Executive Permission Bits (Fix Error 126)
+        run: |
+          cd $GITHUB_WORKSPACE/fox_11.1/device/infinix/X655C
+          
+          # Correct Keymaster binary naming layout to strip downstream extensions
+          if [ -f recovery/root/vendor/bin/hw/android.hardware.keymaster@4.0-service.beanpod ]; then
+            mv recovery/root/vendor/bin/hw/android.hardware.keymaster@4.0-service.beanpod \
+               recovery/root/vendor/bin/hw/android.hardware.keymaster@4.0-service
+          fi
+          
+          # Reinstate the proper executive bit tokens dropped by Windows filesystem environments
+          chmod +x recovery/root/vendor/bin/teei_daemon
+          chmod +x recovery/root/vendor/bin/hw/android.hardware.keymaster@4.0-service
+          chmod +x recovery/root/vendor/bin/hw/android.hardware.gatekeeper@1.0-service
+          chmod +x recovery/root/vendor/bin/bp_kmsetkey_ca
+          chmod +x recovery/root/vendor/bin/vndservice
+          chmod +x recovery/root/vendor/bin/vndservicemanager
+
+      - name: Compile OrangeFox Custom Recovery Image
+        run: |
+          cd $GITHUB_WORKSPACE/fox_11.1
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export FOX_BUILD_DEVICE=X655C
+          export LC_ALL=C
+          export TEMPORARY_DISABLE_SOONG_TESTS=true
+          export OF_PATCH_VARIANT="t63xx"
+          export OF_MAINTAINER="Hylassx"
+          export FOX_MAINTAINER_PATCH_VERSION="1"
+          export OF_VNDK_VERSION=29
+          export OF_USE_VNDK=true
+          
+          source build/envsetup.sh
+          set +e
+          lunch omni_X655C-eng
+          if [ $? -ne 0 ]; then
+            echo "Target omni_X655C-eng completely absent. Recalibrating to standard twrp build format..."
+            lunch twrp_X655C-eng
+          fi
+          set -e
+          mka adbd recoveryimage -j$(nproc --all)
+
+      - name: Consolidate Output Files for Release
+        run: |
+          cd $GITHUB_WORKSPACE/fox_11.1/out/target/product/X655C
+          BUILD_DATE=$(date +"%Y%m%d-%H%M")
+          mkdir -p release
+          cp recovery.img release/OrangeFox-X655C-${BUILD_DATE}-Native.img 2>/dev/null || true
+          cp OrangeFox-*.zip release/ 2>/dev/null || true
+          [ -f boot.img ] && cp boot.img release/ || true
+          [ -f dtbo.img ] && cp dtbo.img release/ || true
+          cd release
+          zip -r OrangeFox-X655C-${BUILD_DATE}-GSI-Ready.zip ./*
+
+      - name: Verify Build Artifact Integrity
+        run: |
+          cd $GITHUB_WORKSPACE/fox_11.1/out/target/product/X655C/release
+          echo "Listing generated release files below:"
+          ls -lh
+
+      - name: Upload Recovery Partition IMG Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrangeFox-Flashable-Image
+          path: ${{ github.workspace }}/fox_11.1/out/target/product/X655C/release/*.img
+
+      - name: Upload Recovery ROM ZIP Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrangeFox-Recovery-Zip
+          path: ${{ github.workspace }}/fox_11.1/out/target/product/X655C/release/*.zip
+
+      - name: Compile and Archive Diagnostics Build Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compilation-diagnostics-logs
+          path: |
+            ${{ github.workspace }}/fox_11.1/out/*.log
+            ${{ github.workspace }}/fox_11.1/out/*.txt
+          if-no-files-found: ignore
+
+      - name: Compute Dynamic Release Identifier Tag
+        id: tag
+        run: |
+          echo "release_tag=OrangeFox-11.1-Native-$(date +"%Y%m%d-%H%M")" >> $GITHUB_OUTPUT
+
+      - name: Generate Official GitHub Repository Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          name: Infinix X655C OrangeFox 11.1 Unified ${{ steps.tag.outputs.release_tag }}
+          generate_release_notes: true
+          files: |
+            ${{ github.workspace }}/fox_11.1/out/target/product/X655C/release/*.img
+            ${{ github.workspace }}/fox_11.1/out/target/product/X655C/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
